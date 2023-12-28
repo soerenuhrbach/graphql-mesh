@@ -9,7 +9,7 @@ import {
 import InMemoryLRUCache from '@graphql-mesh/cache-localforage';
 import { ImportFn, MeshPubSub } from '@graphql-mesh/types';
 import { DefaultLogger, PubSub } from '@graphql-mesh/utils';
-import { addResolversToSchema } from '@graphql-tools/schema';
+import { addResolversToSchema, makeExecutableSchema } from '@graphql-tools/schema';
 import { describeTransformerTests } from '../../../testing/describeTransformerTests.js';
 import NamingConventionTransform from '../src/index.js';
 
@@ -309,5 +309,65 @@ describeTransformerTests('naming-convention', ({ mode, transformSchema }) => {
       `),
     });
     expect(data?._).toEqual('test');
+  });
+
+  it('should resolves the data of a renamed field correctly', async () => {
+    const schema = makeExecutableSchema({
+      typeDefs: /* GraphQL */ `
+        type Query {
+          User_GetCartById(CartId: String!): cart
+        }
+
+        type cart {
+          Id: String!
+          Amount: Int!
+        }
+      `,
+      resolvers: {
+        Query: {
+          User_GetCartById: (root, args, context, info) => {
+            return {
+              Id: args.CartId,
+              Amount: 1234,
+            };
+          },
+        },
+        cart: {
+          Id: (root, args, context, info) => root.Id,
+          Amount: (root, args, context, info) => root.Amount,
+        },
+      },
+    });
+    const newSchema = transformSchema(
+      schema,
+      new NamingConventionTransform({
+        apiName: '',
+        importFn,
+        config: {
+          mode,
+          typeNames: 'pascalCase',
+          enumValues: 'upperCase',
+          fieldNames: 'camelCase',
+          fieldArgumentNames: 'camelCase',
+        },
+        cache,
+        pubsub,
+        baseDir,
+        logger: new DefaultLogger(),
+      }),
+    );
+    const { data, errors } = await execute({
+      schema: newSchema,
+      document: parse(/* GraphQL */ `
+        {
+          userGetCartById(cartId: "asdf") {
+            id
+            amount
+          }
+        }
+      `),
+    });
+    expect(data.userGetCartById).toBeDefined();
+    expect(data.userGetCartById).not.toBeNull();
   });
 });
