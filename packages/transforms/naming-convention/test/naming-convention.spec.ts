@@ -311,30 +311,30 @@ describeTransformerTests('naming-convention', ({ mode, transformSchema }) => {
     expect(data?._).toEqual('test');
   });
 
-  it('should resolves the data of a renamed field correctly', async () => {
+  it('should resolves the data of a renamed fields correctly when arguments did not changed', async () => {
     const schema = makeExecutableSchema({
       typeDefs: /* GraphQL */ `
         type Query {
-          User_GetCartById(CartId: String!): cart
+          Cart_GetCart(cartId: String!, expand: [String]): Cart
         }
 
-        type cart {
+        type Cart {
           Id: String!
           Amount: Int!
         }
       `,
       resolvers: {
         Query: {
-          User_GetCartById: (root, args, context, info) => {
+          Cart_GetCart: (_, args) => {
             return {
-              Id: args.CartId,
+              Id: args.cartId,
               Amount: 1234,
             };
           },
         },
-        cart: {
-          Id: (root, args, context, info) => root.Id,
-          Amount: (root, args, context, info) => root.Amount,
+        Cart: {
+          Id: root => root.Id,
+          Amount: root => root.Amount,
         },
       },
     });
@@ -345,8 +345,6 @@ describeTransformerTests('naming-convention', ({ mode, transformSchema }) => {
         importFn,
         config: {
           mode,
-          typeNames: 'pascalCase',
-          enumValues: 'upperCase',
           fieldNames: 'camelCase',
           fieldArgumentNames: 'camelCase',
         },
@@ -356,18 +354,20 @@ describeTransformerTests('naming-convention', ({ mode, transformSchema }) => {
         logger: new DefaultLogger(),
       }),
     );
-    const { data, errors } = await execute({
+    const { data }: any = await execute({
       schema: newSchema,
       document: parse(/* GraphQL */ `
         {
-          userGetCartById(cartId: "asdf") {
+          cartGetCart(cartId: "asdf") {
             id
             amount
           }
         }
       `),
     });
-    expect(data.userGetCartById).toBeDefined();
-    expect(data.userGetCartById).not.toBeNull();
+    expect(data.Cart_GetCart).not.toBeDefined();
+    expect(data.cartGetCart).toBeDefined();
+    expect(data.cartGetCart).not.toBeNull();
+    expect(data.cartGetCart.id).toBe('asdf');
   });
 });
